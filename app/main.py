@@ -1,214 +1,151 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from typing import Dict, Set, List
 from pydantic import BaseModel
-import sys
+
+
+class EntityDto(BaseModel):
+    id: str
+    properties: Dict[str, str]
+
+
+class RelationshipDto(BaseModel):
+    source_id: str
+    link: str
+    target_id: str
+    
+
+class Database:
+    def __init__(self):
+        self.graph = {
+            "fernando": {
+                "likes": ["coldplay"]
+            },
+            "keyla": {
+                "likes": ["coldplay", "u2"]
+            },
+            "noel": {
+                "likes": ["u2", "oasis"]
+            },
+            "clara": {
+                "likes": ["muse"]
+            },
+            "coldplay": {
+                "is_liked_by": ["fernando", "keyla"]
+            },
+            "u2": {
+                "is_liked_by": ["keyla", "noel"]
+            },
+            "oasis": {
+                "is_liked_by": ["noel"]
+            },
+            "muse": {
+                "is_liked_by": ["clara"]
+            }
+        }
+        # self.entities = {}
+        # self.relationships = {}
+
+    # def add_entity(self, id, properties):
+    #     self.entities[id] = properties
+    #     if not id in self.graph:
+    #         self.graph[id] = []
+
+    # def add_relationship(self, source_id, link, target_id):
+    #     if source_id in self.graph and target_id in self.graph:
+    #         id = source_id + "->" + target_id
+    #         if not id in self.relationships:
+    #             self.relationships[id] = []
+    #         if not link in self.relationships[id]:
+    #             self.relationships[id].append(link)
+    #         if not target_id in self.graph[source_id]:
+    #             self.graph[source_id].append(target_id)
+
+    def search(self, source_id, visited, depth, links, acc):
+        if source_id in visited:
+            return
+        visited.append(source_id)
+        if depth < len(links):
+            link = links[depth]
+            if link in self.graph[source_id]:
+                for target_id in self.graph[source_id][link]:
+                    if target_id not in visited:
+                        if depth == len(links) - 1:
+                            print(target_id)
+                            if target_id not in acc:
+                                acc.append(target_id)
+                        else:
+                            self.search(target_id, visited, depth + 1, links, acc)
+        
+    
+    # def add_relationship(self, source_id, target_id, link, properties):
+    #     if not source_id in self.entities:
+    #         return
+
+    #     if not target_id in self.entities:
+    #         return
+
+    #     id = source_id + "->" + link + "->" + target_id
+
+    #     if id in self.relationships:
+    #         return
+
+    #     self.relationships[id] = properties
+    #     graph[source_id].append(target_id)
 
 
 app = FastAPI()
-entities = []
-primary = {}
-secondary = {}
-graph = {}
-
-
-class Entity(BaseModel):
-    id: str
-    properties: Dict[str, str]
-    relationships: Dict[str, Set[int]] = {}
-
-    def __eq__(self, other):
-        return self.id == other.id
-
-    def __hash__(self):
-        return hash(self.id)
-    
-    def __str__(self):
-        return self.id
-
-    def matches(self, properties: Dict[str, str]):
-        return { **self.properties, **properties } == self.properties
-
-
-class Relationship(BaseModel):
-    relation: str
-    source_id: str
-    target_id: str
-
-
-class Step(BaseModel):
-    relation: str
-    properties: Dict[str, str]
+db = Database()
 
 
 @app.post("/entities/bulk")
-async def add_entities(bulk: List[Entity]):
-    for entity in bulk:
-        if entity.id in primary:
-            raise HTTPException(status_code=400, detail="Entity already exists")
-        entities.append(entity)
-        primary[entity.id] = entity
-        for k in entity.properties:
-            if not k in secondary:
-                secondary[k] = [set() for i in range(10)] 
-            v = entity.properties[k]
-            i = hash(v) % 10
-            secondary[k][i].add(entity)
-        graph[entity.id] = entity.relationships
-    return entities
-
-
-@app.post("/entities/search")
-async def search_entities(criteria: Dict[str, str]):
-    if not criteria:
-        return entities
-    bucket = None
-    n = sys.maxsize
-    for k in criteria:
-        if k in secondary:
-            v = criteria[k]
-            i = hash(v) % 10
-            b = secondary[k][i]
-            if b and len(b) < n:
-                bucket = b
-                n = len(b)
-    result = []
-    if bucket:
-        for id in bucket:
-            entity = primary[id]
-            if entity.matches(criteria):
-                result.append(entity)
-    return result
-  
-
-@app.post("/entities/{source_id}/{relation}/{target_id}")
-async def add_relationship(source_id: str, relation: str, target_id: str):
-    if not source_id in primary:
-        raise HTTPException(status_code=404, detail="Source not found")
-    if not target_id in primary:
-        raise HTTPException(status_code=404, detail="Target not found")
-    entity = primary[source_id]
-    if not relation in entity.relationships:
-        entity.relationships[relation] = set()
-    entity.relationships[relation].add(target_id)
-    return entity
+async def add_entities(entities: List[EntityDto]):
+    for entity in entities:
+        db.add_entity(entity.id, entity.properties)
+    print(db.graph)
+    print(db.entities)
+    print(db.relationships)
+    return db.graph
 
 
 @app.post("/relationships/bulk")
-async def add_relationship(relationships: List[Relationship]):
-    for r in relationships:
-        if not r.source_id in primary:
-            raise HTTPException(status_code=404, detail="Source not found")
-        if not r.target_id in primary:
-            raise HTTPException(status_code=404, detail="Target not found")
-        entity = primary[r.source_id]
-        if not r.relation in entity.relationships:
-            entity.relationships[relation] = set()
-        entity.relationships[r.relation].add(r.target_id)
-    return relationships
-
-
-# @app.post("/entities/{source_id}/recommend")
-# async def recommend(steps: List[Step]):
-#     if not source_id in primary:
-#         raise HTTPException(status_code=404, detail="Source not found")
-
-    
+async def add_relationships(relationships: List[RelationshipDto]):
+    for rel in relationships:
+        db.add_relationship(rel.source_id, rel.link, rel.target_id)
+    print(db.graph)
+    print(db.entities)
+    print(db.relationships)
+    return db.graph
 
 
 
+@app.post("/entities/{id}/recommend")
+async def recommend(id: str, links: List[str]):
+    acc = []
+    db.search(id, [], 0, links, acc)
+    return acc
 
 
 
+# graph = {
+#     "fernando": ["coldplay"],
+#     "coldplay": ["fernando", "keyla"],
+#     "keyla": ["coldplay", "u2"],
+#     "u2": ["keyla", "noel"],
+#     "noel": ["u2", "oasis"],
+#     "oasis": ["noel"],
+#     "clara": ["muse"]
+# }
 
+# visited = []
 
-# from fastapi import FastAPI, HTTPException
-# from typing import Dict, Set
-# from pydantic import BaseModel
-# import sys
+# def traverse(source):
+#     if source in visited:
+#         return
+#     visited.append(source)
+#     for target in graph[source]:
+#         if target not in visited:
+#             traverse(target)
 
+# traverse("fernao")
 
-# app = FastAPI()
-# counter = 0
-# entities = []
-# primary = {}
-# secondary = {}
-# graph = {}
-
-
-# class Entity(BaseModel):
-#     id: int = 0
-#     properties: Dict[str, str] = {}
-#     relationships: Dict[str, Set[int]] = {}
-
-#     def matches(self, props: Dict[str, str]):
-#         return { **self.properties, **props } == self.properties
-
-
-# class Step(BaseModel):
-
-
-
-# @app.post("/entities")
-# async def add_entity(entity: Entity):
-#     global counter
-#     entity.id = counter
-#     counter += 1
-#     entities.append(entity)
-#     primary[entity.id] = entity
-#     for k in entity.properties:
-#         if not k in secondary:
-#             secondary[k] = [set() for i in range(10)] 
-#         v = entity.properties[k]
-#         i = hash(v) % 10
-#         secondary[k][i].add(entity.id)
-#     graph[entity.id] = entity.relationships
-#     return entity
-
-
-# @app.post("/entities/search")
-# async def search_entities(criteria: Dict[str, str]):
-#     if not criteria:
-#         return entities
-#     bucket = None
-#     n = sys.maxsize
-#     for k in criteria:
-#         if k in secondary:
-#             v = criteria[k]
-#             i = hash(v) % 10
-#             b = secondary[k][i]
-#             if b and len(b) < n:
-#                 bucket = b
-#                 n = len(b)
-#     result = []
-#     if bucket:
-#         for id in bucket:
-#             entity = primary[id]
-#             if entity.matches(criteria):
-#                 result.append(entity)
-#     return result
-  
-
-# @app.post("/entities/{source_id}/{relation}/{target_id}")
-# async def add_relationship(source_id: int, relation: str, target_id: int):
-#     if not source_id in primary:
-#         raise HTTPException(status_code=404, detail="Source not found")
-#     if not target_id in primary:
-#         raise HTTPException(status_code=404, detail="Target not found")
-#     entity = primary[source_id]
-#     if not relation in entity.relationships:
-#         entity.relationships[relation] = set()
-#     entity.relationships[relation].add(target_id)
-#     return entity
-
-
-# @app.post("/entities/{source_id}/recommend")
-# async def recommend(source_id: int, relation: str, target_id: int):
-#     if not source_id in primary:
-#         raise HTTPException(status_code=404, detail="Source not found")
-#     if not target_id in primary:
-#         raise HTTPException(status_code=404, detail="Target not found")
-#     entity = primary[source_id]
-#     if not relation in entity.relationships:
-#         entity.relationships[relation] = set()
-#     entity.relationships[relation].add(target_id)
-#     return entity
+# print(visited)
