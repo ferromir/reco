@@ -24,13 +24,13 @@ class Database:
                 "likes": ["coldplay", "u2"]
             },
             "noel": {
-                "likes": ["u2", "oasis"]
+                "likes": ["u2", "oasis", "coldplay"]
             },
             "clara": {
                 "likes": ["muse"]
             },
             "coldplay": {
-                "is_liked_by": ["fernando", "keyla"]
+                "is_liked_by": ["fernando", "keyla", "noel"]
             },
             "u2": {
                 "is_liked_by": ["keyla", "noel"]
@@ -70,7 +70,6 @@ class Database:
                 for target_id in self.graph[source_id][link]:
                     if target_id not in visited:
                         if depth == len(links) - 1:
-                            print(target_id)
                             if target_id not in acc:
                                 acc.append(target_id)
                         else:
@@ -101,9 +100,6 @@ db = Database()
 async def add_entities(entities: List[EntityDto]):
     for entity in entities:
         db.add_entity(entity.id, entity.properties)
-    print(db.graph)
-    print(db.entities)
-    print(db.relationships)
     return db.graph
 
 
@@ -111,11 +107,7 @@ async def add_entities(entities: List[EntityDto]):
 async def add_relationships(relationships: List[RelationshipDto]):
     for rel in relationships:
         db.add_relationship(rel.source_id, rel.link, rel.target_id)
-    print(db.graph)
-    print(db.entities)
-    print(db.relationships)
     return db.graph
-
 
 
 @app.post("/entities/{id}/recommend")
