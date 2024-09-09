@@ -1,120 +1,129 @@
 from fastapi import FastAPI
 from typing import Dict, Set, List
 from pydantic import BaseModel
+import sys
 
 
-class EntityDto(BaseModel):
+class Entity(BaseModel):
     id: str
-    properties: Dict[str, str]
+    properties: Dict[str, str] = {}
+    relationships: Dict[str, List[str]] = {}
 
-
-class RelationshipDto(BaseModel):
-    source_id: str
-    link: str
-    target_id: str
+    def matches(self, properties):
+        return { **self.properties, **properties } == self.properties
     
 
 class Database:
     def __init__(self):
-        self.graph = {
-            "fernando": {
-                "likes": ["coldplay"]
-            },
-            "keyla": {
-                "likes": ["coldplay", "u2"]
-            },
-            "noel": {
-                "likes": ["u2", "oasis", "coldplay"]
-            },
-            "clara": {
-                "likes": ["muse"]
-            },
-            "coldplay": {
-                "is_liked_by": ["fernando", "keyla", "noel"]
-            },
-            "u2": {
-                "is_liked_by": ["keyla", "noel"]
-            },
-            "oasis": {
-                "is_liked_by": ["noel"]
-            },
-            "muse": {
-                "is_liked_by": ["clara"]
-            }
-        }
-        # self.entities = {}
-        # self.relationships = {}
+        self.entities = {}
+        self.indexes = {}
 
-    # def add_entity(self, id, properties):
-    #     self.entities[id] = properties
-    #     if not id in self.graph:
-    #         self.graph[id] = []
+    def add_entity(self, entity):
+        if not entity.id in self.entities:
+            self.entities[entity.id] = entity
+            for k in entity.properties:
+                if not k in self.indexes:
+                    self.indexes[k] = {}
+                v = entity.properties[k]
+                if not v in self.indexes[k]:
+                    self.indexes[k][v] = []
+                self.indexes[k][v].append(entity)
+            return True
+        return False
 
-    # def add_relationship(self, source_id, link, target_id):
-    #     if source_id in self.graph and target_id in self.graph:
-    #         id = source_id + "->" + target_id
-    #         if not id in self.relationships:
-    #             self.relationships[id] = []
-    #         if not link in self.relationships[id]:
-    #             self.relationships[id].append(link)
-    #         if not target_id in self.graph[source_id]:
-    #             self.graph[source_id].append(target_id)
+    def add_relationship(self, source_id, link, target_id):
+        if source_id in self.entities and target_id in self.entities:
+            if not link in self.entities[source_id].relationships:
+                self.entities[source_id].relationships[link] = []
+            if not target_id in self.entities[source_id].relationships[link]:
+                self.entities[source_id].relationships[link].append(target_id)
+            return True
+        return False
 
-    def search(self, source_id, visited, depth, links, acc):
-        if source_id in visited:
+    def search(self, criteria):
+        bucket = None
+        n = sys.maxsize
+        for k in criteria:
+            if k in self.indexes:
+                v = criteria[k]
+                if v in self.indexes[k]:
+                    b = self.indexes[k][v]
+                    if len(b) < n:
+                        bucket = b
+                        n = len(b)
+        result = []
+        if bucket:
+            for entity in bucket:
+                if entity.matches(criteria):
+                    result.append(entity)
+        return result
+
+    def recommendations(self, source_id, visited, depth, links, acc):
+        if source_id in visited or (not source_id in self.entities):
             return
         visited.append(source_id)
         if depth < len(links):
             link = links[depth]
-            if link in self.graph[source_id]:
-                for target_id in self.graph[source_id][link]:
+            if link in self.entities[source_id].relationships:
+                for target_id in self.entities[source_id].relationships[link]:
                     if target_id not in visited:
                         if depth == len(links) - 1:
                             if target_id not in acc:
                                 acc.append(target_id)
                         else:
-                            self.search(target_id, visited, depth + 1, links, acc)
-        
-    
-    # def add_relationship(self, source_id, target_id, link, properties):
-    #     if not source_id in self.entities:
-    #         return
-
-    #     if not target_id in self.entities:
-    #         return
-
-    #     id = source_id + "->" + link + "->" + target_id
-
-    #     if id in self.relationships:
-    #         return
-
-    #     self.relationships[id] = properties
-    #     graph[source_id].append(target_id)
+                            self.recommendations(target_id, visited, depth + 1, links, acc)
 
 
 app = FastAPI()
 db = Database()
 
+# Testing dataset:
 
-@app.post("/entities/bulk")
-async def add_entities(entities: List[EntityDto]):
-    for entity in entities:
-        db.add_entity(entity.id, entity.properties)
-    return db.graph
+db.add_entity(Entity(id="fernando",properties={"generation":"millennial"}))
+db.add_entity(Entity(id="keyla",properties={"generation":"millennial"}))
+db.add_entity(Entity(id="noel",properties={"generation":"genz"}))
+db.add_entity(Entity(id="clara",properties={"generation":"genz"}))
+
+db.add_entity(Entity(id="coldplay"))
+db.add_entity(Entity(id="u2"))
+db.add_entity(Entity(id="oasis"))
+db.add_entity(Entity(id="muse"))
+
+db.add_relationship("fernando", "likes", "coldplay")
+db.add_relationship("keyla", "likes", "coldplay")
+db.add_relationship("keyla", "likes", "u2")
+db.add_relationship("noel", "likes", "u2")
+db.add_relationship("noel", "likes", "oasis")
+db.add_relationship("clara", "likes", "muse")
+
+db.add_relationship("coldplay", "is_liked_by", "fernando")
+db.add_relationship("coldplay", "is_liked_by", "keyla")
+db.add_relationship("u2", "is_liked_by", "keyla")
+db.add_relationship("u2", "is_liked_by", "noel")
+db.add_relationship("oasis", "is_liked_by", "noel")
+db.add_relationship("muse", "is_liked_by", "clara")
 
 
-@app.post("/relationships/bulk")
-async def add_relationships(relationships: List[RelationshipDto]):
-    for rel in relationships:
-        db.add_relationship(rel.source_id, rel.link, rel.target_id)
-    return db.graph
+@app.post("/entities")
+async def add_entity(entity: Entity) -> bool:
+    return db.add_entity(entity)
+
+
+@app.post("/entities/{source_id}/{link}/{target_id}")
+async def add_relationship(source_id: str, link: str, target_id: str) -> bool:
+    return db.add_relationship(source_id, link, target_id)
 
 
 @app.post("/entities/{id}/recommend")
-async def recommend(id: str, links: List[str]):
+async def recommend(id: str, links: List[str]) -> List[str]:
     acc = []
-    db.search(id, [], 0, links, acc)
+    db.recommendations(id, [], 0, links, acc)
     return acc
+
+
+@app.post("/entities/search")
+async def search(criteria: Dict[str, str]) -> List[Entity]:
+    return db.search(criteria)
 
 
 
