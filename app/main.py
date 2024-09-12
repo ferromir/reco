@@ -34,7 +34,7 @@ db.add_rel("the1975", "is_liked_by", "clara")
 @app.post("/entities")
 async def add_entity(entity: Entity) -> Entity:
     if db.has_entity(entity.id):
-        raise HTTPException(status_code=400, detail="Duplicate")
+        raise HTTPException(status_code=400, detail="Entity already exists")
     return db.add_entity(entity)
 
 
@@ -45,8 +45,10 @@ async def search_entities(props: Dict[str, str]) -> List[Entity]:
 
 @app.post("/entities/{source_id}/{link}/{target_id}")
 async def add_relationship(source_id: str, link: str, target_id: str) -> None:
-    if not db.has_entity(source_id) or not db.has_entity(target_id):
-        raise HTTPException(status_code=404, detail="Missing entity")
+    if not db.has_entity(source_id):
+        raise HTTPException(status_code=404, detail="Sources not found")
+    if not db.has_entity(target_id):
+        raise HTTPException(status_code=404, detail="Target not found")
     return db.add_rel(source_id, link, target_id)
 
 
