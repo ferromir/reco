@@ -54,13 +54,13 @@ keyla likes coldplay
 keyla likes u2
 noel likes u2
 noel likes oasis
-clara likes muse
+clara likes the1975
 coldplay is liked by fernando
 coldplay is liked by keyla
 u2 is liked by keyla
 u2 is liked by noel
 oasis is liked by noel
-muse is liked by clara
+the1975 is liked by clara
 ```
 
 The goal here is that `fernando` can receive artist recommendations based on the likes of people with similar taste in music. So the process would look like:
@@ -103,4 +103,3 @@ So far this has been a prototype, using an in-memory application. To develop in 
 * A CQRS architecture in which the API provides the write side. The data can be stored in document store or a relational database.
 * A streaming solution to publish state changes from the write side of the system (such as Kafka, NATS, etc..).
 * The search and graph storages would be projections optimized for their specific end-user needs. This will allow us to update, rebuild and develop quickly.
-
