@@ -36,6 +36,26 @@ curl --location 'http://localhost:8080/entities/search' \
 
 Of course, more fields can be added to the criteria.
 
+## Example of add entity
+
+```bash
+curl --location 'http://localhost:8080/entities' \
+--header 'Content-Type: application/json' \
+--data '{
+    "id": "fernando",
+    "props": {
+        "type": "person",
+        "generation": "millennial"
+    }
+}'
+```
+
+## Example of add relationship
+
+```bash
+curl --location --request POST 'http://localhost:8080/entities/fernando/likes/coldplay'
+```
+
 ## Example of recommendation generation
 
 In order to try the generation, the following curl command can be executed:
